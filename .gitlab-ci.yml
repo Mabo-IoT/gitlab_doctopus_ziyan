@@ -1,0 +1,33 @@
+stages:
+    - build
+    - deploy
+variables:
+    VERSION: 3.7-alpine-1.6
+    # deploy's need variables:
+    # mabo_group/base_application/ci_interface
+    PROJECT_ID_1: 19
+    NEED_FILE_1: trigger_group_ci.py
+    GITLAB_ADRESS: 'https://192.168.253.131:2443'
+    GROUP_ID: 7
+    
+build:
+    stage: build
+    script:
+        - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+        - docker build --rm --build-arg CI_REGISTRY=$CI_REGISTRY -t $CI_REGISTRY_IMAGE:$VERSION .
+        - docker tag $CI_REGISTRY_IMAGE:$VERSION $CI_REGISTRY_IMAGE:latest
+        - docker push $CI_REGISTRY_IMAGE:$VERSION
+        - docker push $CI_REGISTRY_IMAGE:latest
+        - docker rmi $CI_REGISTRY_IMAGE:latest $CI_REGISTRY_IMAGE:$VERSION
+
+deploy:
+    stage: deploy
+    when: manual
+    image: $CI_REGISTRY/mabo/base_python:latest
+    script:
+        # get file trigger_group_ci.py from mabo_group/base_application/ci_interface
+        - curl -k -o $NEED_FILE_1 --request GET --header PRIVATE-TOKEN=$CI_JOB_TOKEN $CI_API_V4_URL/projects/$PROJECT_ID_1/repository/files/$NEED_FILE_1/raw?ref=master
+        # trigger all project of $GROUP_ID
+        - ls -l
+        - python $NEED_FILE_1 --gitlab_address $GITLAB_ADRESS --private_token $PRIVATE_TOKEN --group_id $GROUP_ID --trigger_decription $CI_PROJECT_NAME
+        
